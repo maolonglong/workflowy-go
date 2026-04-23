@@ -1,0 +1,40 @@
+# Allowlisting gitignore template for GO projects prevents us
+# from adding various unwanted local files, such as generated
+# files, developer configurations or IDE-specific files etc.
+#
+# Recommended: Go.AllowList.gitignore
+
+# Ignore everything
+*
+
+# Re-include non-hidden directories so allowlisted files in subdirectories
+# can still be discovered.
+!*/
+
+# But not these files...
+!/.gitignore
+!/AGENTS.md
+
+!*.go
+!go.sum
+!go.mod
+
+!README.md
+!LICENSE
+!skills-lock.json
+
+# Project docs
+!/docs/**/*.md
+
+# Public skills
+!/skills/**/*.md
+
+# Hidden directories must be allowlisted explicitly.
+!/.agents/**/*.md
+!/.agents/**/*.yaml
+!/.agents/**/*.yml
+
+# !Makefile
+
+# ...even if they are in subdirectories
+!*/

@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "skills": {
+    "modular-go": {
+      "source": "PsiACE/skills",
+      "sourceType": "github",
+      "computedHash": "d93eb54e08441d2208c667731f1212cacca296f03e0d13cab172a2352cc7cc47"
+    }
+  }
+}
