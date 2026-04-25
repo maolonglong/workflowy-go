@@ -1,54 +1,68 @@
 ---
 name: workflowy
-description: "Interact with WorkFlowy via the wf CLI tool. Use when asked to create, read, update, delete, search, or organize WorkFlowy nodes, or manage a task/note workflow through the CLI."
+description: "Use when asked to interact with Workflowy via the wf CLI: create, read, list, update, move, complete, uncomplete, delete, search, or reorganize Workflowy nodes, inbox tasks, notes, projects, targets, or tree views."
 ---
 
-# workflowy
+# Workflowy
 
-Guide for agents to interact with WorkFlowy using the `wf` CLI tool.
+Use this skill to operate on a real Workflowy account through the `wf` CLI.
+
+## When to Use
+
+- Create or update Workflowy tasks, notes, projects, or outlines
+- Inspect `inbox`, `home`, shortcuts, or a node subtree
+- Search Workflowy content from the CLI
+- Reorganize items by moving, completing, or deleting nodes
+- Build quick automation steps around `wf --json`
+
+## Operating Rules
+
+1. Prefer `--json` unless the user explicitly wants human-readable output.
+2. Treat delete as permanent. If the target is ambiguous, resolve it with `search`, `list`, or `get` before deleting.
+3. Prefer target refs like `inbox` and `home` when they fit; otherwise use node UUIDs.
+4. `wf search` and `wf tree` rely on the export API cache. Avoid repeated `--refresh` calls because the export endpoint is rate-limited to roughly **1 request/minute**.
+5. If search or tree hits `429 Too Many Requests`, retry without `--refresh` first so the cached export can be reused.
+6. Do not tell the user to log in again unless the CLI actually returns an authentication error.
 
 ## Authentication
 
-Set the `WF_API_KEY` environment variable before running any command:
+The CLI works with either:
 
 ```bash
 export WF_API_KEY=wf_your_api_key
 ```
 
-Or authenticate once via `wf auth login` (interactive prompt or piped stdin).
+or a previously saved login:
 
-## Output Format
+```bash
+wf auth login
+```
 
-Always pass `--json` for structured, parseable output. All JSON responses follow this envelope:
+## JSON Envelope
+
+When `--json` is used, responses follow this shape:
 
 ```json
 {"success": true, "data": ...}
 {"success": false, "error": "message", "type": "error_type"}
 ```
 
-Use `--max-output N` to cap output length (rune-safe truncation, 0 = unlimited).
+Useful global flags:
 
-## Key Concepts
+- `--json` for structured output
+- `--max-output N` to cap text output size
 
-- **Node**: A WorkFlowy item (bullet). Has an ID (UUID), name, optional note, layout, and completion status.
-- **Target**: A named location — `inbox`, `home`, or a shortcut. Use as parent refs.
-- **Parent ref**: Either a node UUID or a target key like `inbox` or `home`.
-- **Position**: `top` or `bottom` — where to place a node among siblings.
-- **Layout modes**: `bullets`, `todo`, `h1`, `h2`, `h3`, `code-block`, `quote-block`.
+## Core Commands
 
-## Commands
-
-### Create a node
+### Create
 
 ```bash
-wf create "Buy groceries" --parent inbox --position top --json
+wf create "Buy groceries" --parent inbox --position top --layout todo --json
 ```
 
-Optional flags: `--parent`, `--note`, `--layout`, `--position`.
+Optional flags: `--parent`, `--note`, `--layout`, `--position`
 
-Returns: `{"success": true, "data": {"item_id": "..."}}`
-
-### Get a node
+### Get
 
 ```bash
 wf get <node-id> --json
@@ -60,23 +74,19 @@ wf get <node-id> --json
 wf list --parent inbox --json
 ```
 
-Without `--parent`, lists root-level children.
+If `--parent` is omitted, this lists top-level nodes.
 
-### Update a node
-
-```bash
-wf update <node-id> --name "New title" --note "Updated note" --json
-```
-
-Flags: `--name`, `--note`, `--layout`. Only changed fields are sent.
-
-### Delete a node
+### Update
 
 ```bash
-wf delete <node-id> --json
+wf update <node-id> --name "New title" --note "Updated note" --layout todo --json
 ```
 
-Permanent deletion — no undo.
+### Move
+
+```bash
+wf move <node-id> --parent home --position bottom --json
+```
 
 ### Complete / Uncomplete
 
@@ -85,66 +95,95 @@ wf complete <node-id> --json
 wf uncomplete <node-id> --json
 ```
 
-### Move a node
+### Delete
 
 ```bash
-wf move <node-id> --parent home --position bottom --json
+wf delete <node-id> --json
 ```
 
-### Search
-
-```bash
-wf search "keyword" --json
-```
-
-Searches node names and notes (case-insensitive). Uses a local cache (5 min TTL). Pass `--refresh` to force a fresh export from the API.
-
-### Tree view
+### Tree
 
 ```bash
 wf tree --depth 3 --json
+wf tree --refresh --depth 3 --json
 ```
 
-Exports all nodes and builds a hierarchical tree. `--depth 0` = unlimited. Pass `--refresh` to bypass cache.
+`--depth 0` means unlimited depth.
 
-### List targets
+### Targets
 
 ```bash
 wf targets --json
 ```
 
-Returns available targets (inbox, home, shortcuts) with their keys and types.
+## Search
 
-## Workflow Patterns
-
-### Create a task list under inbox
+`wf search` uses cached export data and supports a Workflowy-style subset:
 
 ```bash
-wf create "Project Tasks" --parent inbox --layout todo --json
-# capture item_id from response, then:
-wf create "Task 1" --parent <item_id> --json
-wf create "Task 2" --parent <item_id> --json
+wf search 'project alpha' --json
+wf search '@me OR @you' --json
+wf search '-#done' --json
+wf search '"exact phrase"' --json
+wf search '#project > is:todo -is:complete' --json
+wf search 'has:note OR is:code-block' --json
+wf search 'created:7d' --json
+wf search 'changed:24h is:todo' --json
 ```
 
-### Find and update a node
+Supported query features:
+
+- implicit `AND`
+- `OR`
+- unary `-`
+- quoted phrases
+- nested ancestor search with `>`
+- `is:todo`, `is:complete`, `is:bullets`, `is:h1`, `is:h2`, `is:h3`, `is:code-block`, `is:quote-block`
+- `has:note`
+- `created:<age>` and `changed:<age>` where age looks like `30m`, `12h`, `7d`, `2w`
+
+Unsupported web-only search operators such as `text:`, `highlight:`, attachments, mirrors, backlinks, and sharing state return explicit errors because they are not present in export data.
+
+## Recommended Procedures
+
+### Find then update
 
 ```bash
-wf search "meeting notes" --json
-# pick the target node id from results
+wf search '"meeting notes"' --json
+wf get <node-id> --json
 wf update <node-id> --note "Added action items" --json
 ```
 
-### Organize: move completed items
+### Create a project under inbox
 
 ```bash
-wf list --parent inbox --json
-# filter completed items from response (completedAt != null)
+wf create "#project Launch plan" --parent inbox --json
+wf create "Draft brief" --parent <project-id> --layout todo --json
+wf create "Review assets" --parent <project-id> --layout todo --json
+```
+
+### Reorganize completed work
+
+```bash
+wf search 'is:complete' --json
 wf move <node-id> --parent home --json
 ```
 
+### Inspect structure safely
+
+```bash
+wf list --parent inbox --json
+wf tree --depth 2 --json
+```
+
+Use `--refresh` only when cached export data is too stale for the task.
+
 ## Error Handling
 
-Check `success` field in JSON output. Common errors:
-- **Not found**: invalid node ID.
-- **Rate limited**: too many API calls — back off and retry.
-- **Not authenticated**: missing or invalid API key.
+Check `success` first in JSON mode.
+
+Common failures:
+
+- **Not authenticated**: missing or invalid API key
+- **Not found**: bad node ID or parent ref
+- **Rate limited**: too many export requests or rapid API activity
