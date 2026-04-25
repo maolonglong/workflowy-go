@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 )
 
 const (
@@ -75,10 +76,19 @@ type service struct {
 }
 
 func (s *service) newRequest(method, path string, body any) (*http.Request, error) {
-	u, err := url.JoinPath(s.client.baseURL, path)
+	baseURL, err := url.Parse(s.client.baseURL)
 	if err != nil {
 		return nil, fmt.Errorf("workflowy: invalid URL: %w", err)
 	}
+	refURL, err := url.Parse(path)
+	if err != nil {
+		return nil, fmt.Errorf("workflowy: invalid URL: %w", err)
+	}
+	if !strings.HasSuffix(baseURL.Path, "/") {
+		baseURL.Path += "/"
+	}
+	refURL.Path = strings.TrimPrefix(refURL.Path, "/")
+	u := baseURL.ResolveReference(refURL)
 
 	var req *http.Request
 	if body != nil {
@@ -86,13 +96,13 @@ func (s *service) newRequest(method, path string, body any) (*http.Request, erro
 		if err != nil {
 			return nil, fmt.Errorf("workflowy: marshal request body: %w", err)
 		}
-		req, err = http.NewRequest(method, u, bytes.NewReader(buf))
+		req, err = http.NewRequest(method, u.String(), bytes.NewReader(buf))
 		if err != nil {
 			return nil, err
 		}
 		req.Header.Set("Content-Type", "application/json")
 	} else {
-		req, err = http.NewRequest(method, u, nil)
+		req, err = http.NewRequest(method, u.String(), nil)
 		if err != nil {
 			return nil, err
 		}
