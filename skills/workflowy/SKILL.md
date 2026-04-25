@@ -5,185 +5,157 @@ description: "Use when asked to interact with Workflowy via the wf CLI: create, 
 
 # Workflowy
 
-Use this skill to operate on a real Workflowy account through the `wf` CLI.
-
-## When to Use
-
-- Create or update Workflowy tasks, notes, projects, or outlines
-- Inspect `inbox`, `home`, shortcuts, or a node subtree
-- Search Workflowy content from the CLI
-- Reorganize items by moving, completing, or deleting nodes
-- Build quick automation steps around `wf --json`
+Operate on a real Workflowy account through the `wf` CLI.
 
 ## Operating Rules
 
-1. Prefer `--json` unless the user explicitly wants human-readable output.
-2. Treat delete as permanent. If the target is ambiguous, resolve it with `search`, `list`, or `get` before deleting.
-3. Prefer target refs like `inbox` and `home` when they fit; otherwise use node UUIDs.
-4. `wf search` and `wf tree` rely on the export API cache. Avoid repeated `--refresh` calls because the export endpoint is rate-limited to roughly **1 request/minute**.
-5. If search or tree hits `429 Too Many Requests`, retry without `--refresh` first so the cached export can be reused.
-6. Do not tell the user to log in again unless the CLI actually returns an authentication error.
+1. Always use `--json` unless the user explicitly wants human-readable output.
+2. Treat delete as permanent — resolve ambiguous targets with `search`, `list`, or `get` first.
+3. Use target refs (`inbox`, `home`) when they fit; otherwise use node UUIDs.
+4. **Rate limits**: `wf search` and `wf tree` rely on an export API cache. The export endpoint is rate-limited to ~1 req/min.
+   - Never pass `--refresh` unless the user says data is stale or you just created/modified nodes and need fresh results.
+   - On `429 Too Many Requests`, retry **without** `--refresh` to reuse the cache.
+5. Do not suggest re-authentication unless the CLI actually returns an auth error.
+6. For large trees, always set `--depth` (e.g. `--depth 2`) to avoid overwhelming output. `--depth 0` means unlimited.
 
 ## Authentication
 
-The CLI works with either:
+```bash
+export WF_API_KEY=wf_your_api_key   # env var
+wf auth login                        # or interactive login
+```
+
+## Global Flags
+
+| Flag | Purpose |
+|------|---------|
+| `--json` | Structured JSON output |
+| `--max-output N` | Cap text output length (0 = unlimited) |
+
+JSON envelope: `{"success": true, "data": ...}` or `{"success": false, "error": "...", "type": "..."}`.
+Always check `success` before reading `data`.
+
+## Commands
+
+### create
 
 ```bash
-export WF_API_KEY=wf_your_api_key
+wf create "<name>" [--parent <uuid|target>] [--note "..."] [--layout <mode>] [--position top|bottom] --json
 ```
 
-or a previously saved login:
+Layout modes: `bullets`, `todo`, `h1`, `h2`, `h3`, `code-block`, `quote-block`.
+
+### get
 
 ```bash
-wf auth login
+wf get <id> --json
 ```
 
-## JSON Envelope
+### list vs tree
 
-When `--json` is used, responses follow this shape:
+| | `wf list` | `wf tree` |
+|---|-----------|-----------|
+| Scope | Direct children only | Full subtree |
+| Source | Live API | Cached export |
+| Rate limit | No | Yes (~1/min with `--refresh`) |
+| Key flag | `--parent <uuid\|target>` | `--depth N`, `--refresh` |
 
-```json
-{"success": true, "data": ...}
-{"success": false, "error": "message", "type": "error_type"}
-```
-
-Useful global flags:
-
-- `--json` for structured output
-- `--max-output N` to cap text output size
-
-## Core Commands
-
-### Create
+**Use `list`** when you only need one level of children (e.g. check inbox contents).
+**Use `tree`** when you need the full hierarchy or deep structure.
 
 ```bash
-wf create "Buy groceries" --parent inbox --position top --layout todo --json
+wf list [--parent <uuid|target>] --json
+wf tree [--depth N] [--refresh] --json
 ```
 
-Optional flags: `--parent`, `--note`, `--layout`, `--position`
-
-### Get
+### update
 
 ```bash
-wf get <node-id> --json
+wf update <id> [--name "..."] [--note "..."] [--layout <mode>] --json
 ```
 
-### List children
+### move
 
 ```bash
-wf list --parent inbox --json
+wf move <id> --parent <uuid|target> [--position top|bottom] --json
 ```
 
-If `--parent` is omitted, this lists top-level nodes.
-
-### Update
+### complete / uncomplete
 
 ```bash
-wf update <node-id> --name "New title" --note "Updated note" --layout todo --json
+wf complete <id> --json
+wf uncomplete <id> --json
 ```
 
-### Move
+### delete
 
 ```bash
-wf move <node-id> --parent home --position bottom --json
+wf delete <id> --json
 ```
 
-### Complete / Uncomplete
-
-```bash
-wf complete <node-id> --json
-wf uncomplete <node-id> --json
-```
-
-### Delete
-
-```bash
-wf delete <node-id> --json
-```
-
-### Tree
-
-```bash
-wf tree --depth 3 --json
-wf tree --refresh --depth 3 --json
-```
-
-`--depth 0` means unlimited depth.
-
-### Targets
+### targets
 
 ```bash
 wf targets --json
 ```
 
+Returns available target refs (inbox, home, shortcuts).
+
 ## Search
 
-`wf search` uses cached export data and supports a Workflowy-style subset:
+Uses cached export data. Supports a Workflowy-style query subset:
 
 ```bash
-wf search 'project alpha' --json
-wf search '@me OR @you' --json
-wf search '-#done' --json
-wf search '"exact phrase"' --json
-wf search '#project > is:todo -is:complete' --json
-wf search 'has:note OR is:code-block' --json
-wf search 'created:7d' --json
-wf search 'changed:24h is:todo' --json
+wf search '<query>' [--refresh] --json
 ```
 
-Supported query features:
+Query syntax:
 
-- implicit `AND`
-- `OR`
-- unary `-`
-- quoted phrases
-- nested ancestor search with `>`
-- `is:todo`, `is:complete`, `is:bullets`, `is:h1`, `is:h2`, `is:h3`, `is:code-block`, `is:quote-block`
-- `has:note`
-- `created:<age>` and `changed:<age>` where age looks like `30m`, `12h`, `7d`, `2w`
+| Syntax | Meaning |
+|--------|---------|
+| `word1 word2` | Implicit AND |
+| `word1 OR word2` | Alternatives |
+| `-term` | Exclude |
+| `"exact phrase"` | Exact match |
+| `ancestor > child` | Nested ancestor search |
+| `is:todo`, `is:complete`, `is:bullets` | Layout/state filters |
+| `is:h1`, `is:h2`, `is:h3` | Heading filters |
+| `is:code-block`, `is:quote-block` | Block type filters |
+| `has:note` | Has a note |
+| `created:7d`, `changed:24h` | Age filters (`30m`, `12h`, `7d`, `2w`) |
 
-Unsupported web-only search operators such as `text:`, `highlight:`, attachments, mirrors, backlinks, and sharing state return explicit errors because they are not present in export data.
+**Unsupported** (web-only, not in export data): `text:`, `highlight:`, attachments, mirrors, backlinks, sharing state — these return explicit errors.
 
-## Recommended Procedures
+## Common Workflows
 
-### Find then update
+### Find → inspect → update
 
 ```bash
-wf search '"meeting notes"' --json
-wf get <node-id> --json
-wf update <node-id> --note "Added action items" --json
+wf search '"meeting notes"' --json        # find by content
+wf get <id> --json                         # inspect details
+wf update <id> --note "Action items" --json
 ```
 
-### Create a project under inbox
+### Build a project in inbox
 
 ```bash
-wf create "#project Launch plan" --parent inbox --json
+wf create "#project Launch" --parent inbox --json
+# use returned item_id as parent for sub-tasks
 wf create "Draft brief" --parent <project-id> --layout todo --json
 wf create "Review assets" --parent <project-id> --layout todo --json
 ```
 
-### Reorganize completed work
+### Archive completed items
 
 ```bash
 wf search 'is:complete' --json
-wf move <node-id> --parent home --json
+wf move <id> --parent home --json
 ```
-
-### Inspect structure safely
-
-```bash
-wf list --parent inbox --json
-wf tree --depth 2 --json
-```
-
-Use `--refresh` only when cached export data is too stale for the task.
 
 ## Error Handling
 
-Check `success` first in JSON mode.
+Common `type` values in error responses:
 
-Common failures:
-
-- **Not authenticated**: missing or invalid API key
-- **Not found**: bad node ID or parent ref
-- **Rate limited**: too many export requests or rapid API activity
+- **Not authenticated** — missing or invalid API key / session
+- **Not found** — bad node ID or unknown target ref
+- **Rate limited** — too many export API requests; wait or drop `--refresh`
