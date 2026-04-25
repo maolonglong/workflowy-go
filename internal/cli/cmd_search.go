@@ -19,25 +19,42 @@ func (a *app) newSearchCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "search <query>",
-		Short: "Search nodes by name or note text",
-		Args:  cobra.ExactArgs(1),
+		Short: "Search nodes with Workflowy-style query syntax",
+		Long: `Search exported Workflowy nodes using a practical subset of Workflowy search syntax.
+
+Supported operators:
+  word1 word2         implicit AND
+  word1 OR word2      alternatives
+  -term               exclude matches
+  "exact phrase"      exact phrase
+  ancestor > child    nested ancestor search
+  is:todo             item type/layout filters
+  is:complete         completion filter
+  has:note            note presence filter
+  created:7d          created within the last 7 days
+  changed:24h         changed within the last 24 hours
+
+Unsupported web-only operators such as text:, highlight:, shares, mirrors,
+attachments, and backlinks return explicit errors because that data is not
+available in Workflowy's export API.`,
+		Example: strings.Join([]string{
+			`  wf search "project alpha"`,
+			`  wf search '#project > is:todo -is:complete'`,
+			`  wf search 'meeting > "follow up"'`,
+			`  wf search 'has:note OR is:code-block'`,
+			`  wf search 'changed:7d is:todo'`,
+		}, "\n"),
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			query := strings.ToLower(args[0])
+			query, err := compileSearchQuery(args[0])
+			if err != nil {
+				return err
+			}
 			nodes, err := a.loadOrExport(cmd.Context(), refresh)
 			if err != nil {
 				return err
 			}
-
-			var matches []*workflowy.Node
-			for _, n := range nodes {
-				if strings.Contains(strings.ToLower(n.Name), query) {
-					matches = append(matches, n)
-					continue
-				}
-				if n.Note != nil && strings.Contains(strings.ToLower(*n.Note), query) {
-					matches = append(matches, n)
-				}
-			}
+			matches := query.Filter(nodes)
 
 			if a.jsonOutput {
 				printSuccess(os.Stdout, matches)

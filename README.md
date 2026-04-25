@@ -144,6 +144,32 @@ Use `--json` for JSON output (useful for scripting and AI agents):
 wf list --parent inbox --json
 ```
 
+`wf search` supports a Workflowy-style subset over exported node data:
+
+```bash
+wf search 'project alpha'                 # implicit AND
+wf search '@me OR @you'
+wf search '-#done'
+wf search '"exact phrase"'
+wf search '#project > is:todo -is:complete'
+wf search 'has:note OR is:code-block'
+wf search 'created:7d'
+wf search 'changed:24h is:todo'
+```
+
+Supported filters currently include:
+
+- text and tag matches across node names + notes
+- `OR`, unary `-`, and quoted phrases
+- nested ancestor search with `>`
+- `is:todo`, `is:complete`, `is:bullets`, `is:h1`, `is:h2`, `is:h3`, `is:code-block`, `is:quote-block`
+- `has:note`
+- `created:<age>` and `changed:<age>` where `<age>` is relative time like `30m`, `12h`, `7d`, or `2w`
+
+Workflowy web operators that require richer export metadata (for example `text:`,
+`highlight:`, attachments, mirrors, backlinks, or sharing state) return explicit
+errors in the CLI.
+
 ## Error Handling
 
 ```go
