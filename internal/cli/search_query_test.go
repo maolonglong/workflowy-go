@@ -345,6 +345,51 @@ func TestSearchQueryExecutionEdgeCases(t *testing.T) {
 	})
 }
 
+func FuzzCompileSearchQuery(f *testing.F) {
+	seeds := []string{
+		`#project > is:todo -is:complete`,
+		`"follow up soon"`,
+		`@me OR is:code-block`,
+		`#project > frontend > @me`,
+		`has:note`,
+		`is:complete`,
+		`created:7d`,
+		`changed:1h`,
+		`--@me`,
+		`> foo`,
+		`project >`,
+		`"unterminated`,
+		`""`,
+		``,
+		`   `,
+		`-`,
+		`foo:bar`,
+		`OR project`,
+	}
+	for _, s := range seeds {
+		f.Add(s)
+	}
+	f.Fuzz(func(t *testing.T, raw string) {
+		q, err := compileSearchQuery(raw)
+		if err != nil {
+			return
+		}
+		// A successfully compiled query must be safe to execute against
+		// any node set, including nil and self-referential cycles.
+		_ = q.Filter(nil)
+		self := "self"
+		ts := workflowy.Timestamp{Time: time.Unix(1760000000, 0).UTC()}
+		_ = q.Filter([]*workflowy.Node{{
+			ID:         self,
+			Name:       raw,
+			Data:       workflowy.NodeData{LayoutMode: workflowy.LayoutBullets},
+			ParentID:   &self,
+			CreatedAt:  ts,
+			ModifiedAt: ts,
+		}})
+	})
+}
+
 func mustCompile(t *testing.T, raw string) *compiledSearchQuery {
 	t.Helper()
 	q, err := compileSearchQuery(raw)
