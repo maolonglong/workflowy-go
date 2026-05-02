@@ -15,7 +15,11 @@ func (a *app) newCompleteCmd() *cobra.Command {
 		Short: "Mark a node as completed",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := a.client.Nodes.Complete(args[0]).Do(cmd.Context()); err != nil {
+			id, err := a.resolveNodeID(cmd.Context(), args[0])
+			if err != nil {
+				return err
+			}
+			if err := a.client.Nodes.Complete(id).Do(cmd.Context()); err != nil {
 				return err
 			}
 			if a.jsonOutput {
@@ -34,7 +38,11 @@ func (a *app) newUncompleteCmd() *cobra.Command {
 		Short: "Mark a node as not completed",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := a.client.Nodes.Uncomplete(args[0]).Do(cmd.Context()); err != nil {
+			id, err := a.resolveNodeID(cmd.Context(), args[0])
+			if err != nil {
+				return err
+			}
+			if err := a.client.Nodes.Uncomplete(id).Do(cmd.Context()); err != nil {
 				return err
 			}
 			if a.jsonOutput {
@@ -55,9 +63,17 @@ func (a *app) newMoveCmd() *cobra.Command {
 		Short: "Move a node to a new parent",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			call := a.client.Nodes.Move(args[0])
+			id, err := a.resolveNodeID(cmd.Context(), args[0])
+			if err != nil {
+				return err
+			}
+			call := a.client.Nodes.Move(id)
 			if parent != "" {
-				call = call.ParentID(workflowy.ParentRef(parent))
+				parentID, err := a.resolveNodeID(cmd.Context(), parent)
+				if err != nil {
+					return err
+				}
+				call = call.ParentID(workflowy.ParentRef(parentID))
 			}
 			if position != "" {
 				call = call.Position(workflowy.Position(position))

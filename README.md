@@ -133,10 +133,13 @@ wf update <node-id> --name "New title" --note "Some notes"
 wf complete <node-id>
 wf move <node-id> --parent home
 wf delete <node-id>
+wf id https://workflowy.com/#/<short-id>
 wf tree --depth 3
 wf search "keyword"
 wf targets
 ```
+
+Wherever a node ID is accepted you can also pass a Workflowy internal link, a 12-character short ID, or a target key (e.g. `home`, `inbox`).
 
 Use `--json` for JSON output (useful for scripting and AI agents):
 

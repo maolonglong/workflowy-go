@@ -11,7 +11,7 @@ Operate on a real Workflowy account through the `wf` CLI.
 
 1. Always use `--json` unless the user explicitly wants human-readable output.
 2. Treat delete as permanent — resolve ambiguous targets with `search`, `list`, or `get` first.
-3. Use target refs (`inbox`, `home`) when they fit; otherwise use node UUIDs.
+3. Anywhere a node ID is accepted you can pass a UUID, a 12-character short ID, a Workflowy internal link (`https://workflowy.com/#/<short-id>`), or a target ref (`inbox`, `home`). Pass the user's raw reference through unchanged — the CLI resolves it. Use `wf id <ref>` when you need the canonical UUID.
 4. **Rate limits**: `wf search` and `wf tree` rely on an export API cache. The export endpoint is rate-limited to ~1 req/min.
    - Never pass `--refresh` unless the user says data is stale or you just created/modified nodes and need fresh results.
    - On `429 Too Many Requests`, retry **without** `--refresh` to reuse the cache.
@@ -100,6 +100,14 @@ wf targets --json
 ```
 
 Returns available target refs (inbox, home, shortcuts).
+
+### id
+
+```bash
+wf id <ref> --json
+```
+
+Resolves a UUID, 12-character short ID, internal link, or target ref to a canonical UUID. Use only when you specifically need the full UUID (e.g. for stable cross-session references); regular commands accept any of these forms directly.
 
 ## Search
 

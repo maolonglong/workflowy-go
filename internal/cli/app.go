@@ -65,6 +65,7 @@ func Execute() int {
 		a.newCompleteCmd(),
 		a.newUncompleteCmd(),
 		a.newMoveCmd(),
+		a.newIDCmd(),
 		a.newTreeCmd(),
 		a.newSearchCmd(),
 		a.newTargetsCmd(),

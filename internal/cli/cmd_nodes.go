@@ -19,7 +19,11 @@ func (a *app) newCreateCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			call := a.client.Nodes.Create(args[0])
 			if parent != "" {
-				call = call.ParentID(workflowy.ParentRef(parent))
+				parentID, err := a.resolveNodeID(cmd.Context(), parent)
+				if err != nil {
+					return err
+				}
+				call = call.ParentID(workflowy.ParentRef(parentID))
 			}
 			if note != "" {
 				call = call.Note(note)
@@ -57,7 +61,11 @@ func (a *app) newGetCmd() *cobra.Command {
 		Short: "Get a single node",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			node, err := a.client.Nodes.Get(args[0]).Do(cmd.Context())
+			id, err := a.resolveNodeID(cmd.Context(), args[0])
+			if err != nil {
+				return err
+			}
+			node, err := a.client.Nodes.Get(id).Do(cmd.Context())
 			if err != nil {
 				return err
 			}
@@ -86,7 +94,11 @@ func (a *app) newListCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			call := a.client.Nodes.List()
 			if parent != "" {
-				call = call.ParentID(workflowy.ParentRef(parent))
+				parentID, err := a.resolveNodeID(cmd.Context(), parent)
+				if err != nil {
+					return err
+				}
+				call = call.ParentID(workflowy.ParentRef(parentID))
 			}
 			nodes, err := call.Do(cmd.Context())
 			if err != nil {
@@ -115,7 +127,11 @@ func (a *app) newUpdateCmd() *cobra.Command {
 		Short: "Update a node",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			call := a.client.Nodes.Update(args[0])
+			id, err := a.resolveNodeID(cmd.Context(), args[0])
+			if err != nil {
+				return err
+			}
+			call := a.client.Nodes.Update(id)
 			if cmd.Flags().Changed("name") {
 				call = call.Name(name)
 			}
@@ -150,7 +166,11 @@ func (a *app) newDeleteCmd() *cobra.Command {
 		Short: "Delete a node permanently",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := a.client.Nodes.Delete(args[0]).Do(cmd.Context()); err != nil {
+			id, err := a.resolveNodeID(cmd.Context(), args[0])
+			if err != nil {
+				return err
+			}
+			if err := a.client.Nodes.Delete(id).Do(cmd.Context()); err != nil {
 				return err
 			}
 			if a.jsonOutput {

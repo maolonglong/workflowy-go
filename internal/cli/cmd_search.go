@@ -103,11 +103,8 @@ func (a *app) loadOrExport(ctx context.Context, forceRefresh bool) ([]*workflowy
 		return nil, err
 	}
 
-	// Save to cache.
-	if err := os.MkdirAll(dir, 0o700); err == nil {
-		if data, err := json.Marshal(nodes); err == nil {
-			_ = os.WriteFile(cachePath, data, 0o600)
-		}
+	if data, err := json.Marshal(nodes); err == nil {
+		_ = writeFileAtomic(cachePath, data, 0o600)
 	}
 
 	return nodes, nil
