@@ -2,7 +2,20 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-go_version="$(awk '$1 == "go" { print $2; exit }' "$repo_root/go.mod")"
+go_series="$(awk '$1 == "go" { split($2, version, "."); print version[1] "." version[2]; exit }' "$repo_root/go.mod")"
+tmp_dir="$(mktemp -d)"
+trap 'rm -rf "$tmp_dir"' EXIT
+
+curl -fsSL 'https://go.dev/dl/?mode=json&include=all' -o "$tmp_dir/releases.json"
+go_version="$(
+  awk -F '"' -v prefix="go$go_series." \
+    '$2 == "version" && index($4, prefix) == 1 { print substr($4, 3); exit }' \
+    "$tmp_dir/releases.json"
+)"
+if [[ -z "$go_version" ]]; then
+  echo "No Go release found for the $go_series series." >&2
+  exit 1
+fi
 
 case "$(uname -m)" in
   x86_64) go_arch=amd64 ;;
@@ -21,8 +34,6 @@ fi
 if [[ "$installed_version" != "go$go_version" ]]; then
   archive="go${go_version}.linux-${go_arch}.tar.gz"
   download_url="https://dl.google.com/go/$archive"
-  tmp_dir="$(mktemp -d)"
-  trap 'rm -rf "$tmp_dir"' EXIT
 
   echo "Installing Go $go_version for linux/$go_arch..."
   curl -fsSL "$download_url.sha256" -o "$tmp_dir/$archive.sha256"
