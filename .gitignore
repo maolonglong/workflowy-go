@@ -33,6 +33,8 @@
 !/.agents/**/*.md
 !/.agents/**/*.yaml
 !/.agents/**/*.yml
+!/.agents/setup
+!/.agents/resume
 
 # !Makefile
 

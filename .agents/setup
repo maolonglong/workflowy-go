@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+go_version="$(awk '$1 == "go" { print $2; exit }' "$repo_root/go.mod")"
+
+case "$(uname -m)" in
+  x86_64) go_arch=amd64 ;;
+  aarch64|arm64) go_arch=arm64 ;;
+  *)
+    echo "Unsupported architecture: $(uname -m)" >&2
+    exit 1
+    ;;
+esac
+
+installed_version=""
+if [[ -x /usr/local/go/bin/go ]]; then
+  installed_version="$(/usr/local/go/bin/go env GOVERSION)"
+fi
+
+if [[ "$installed_version" != "go$go_version" ]]; then
+  archive="go${go_version}.linux-${go_arch}.tar.gz"
+  download_url="https://dl.google.com/go/$archive"
+  tmp_dir="$(mktemp -d)"
+  trap 'rm -rf "$tmp_dir"' EXIT
+
+  echo "Installing Go $go_version for linux/$go_arch..."
+  curl -fsSL "$download_url.sha256" -o "$tmp_dir/$archive.sha256"
+  curl -fsSL "$download_url" -o "$tmp_dir/$archive"
+  printf '%s  %s\n' "$(cat "$tmp_dir/$archive.sha256")" "$tmp_dir/$archive" | sha256sum --check --status
+  sudo rm -rf /usr/local/go
+  sudo tar -C /usr/local -xzf "$tmp_dir/$archive"
+fi
+
+# /usr/local/bin is already on Amp's non-interactive login-shell PATH.
+sudo ln -sfn /usr/local/go/bin/go /usr/local/bin/go
+sudo ln -sfn /usr/local/go/bin/gofmt /usr/local/bin/gofmt
+
+echo "Downloading Go module dependencies..."
+cd "$repo_root"
+/usr/local/go/bin/go mod download
+
+echo "Orb setup complete ($(go version))."
